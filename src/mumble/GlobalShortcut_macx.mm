@@ -135,6 +135,10 @@ GlobalShortcutMac::GlobalShortcutMac()
 	return;
 #endif
 
+	if (__builtin_available(macOS 10.15, *)) {
+		CGRequestListenEventAccess();
+	}
+
 	CGEventMask evmask = CGEventMaskBit(kCGEventLeftMouseDown) |
 	                     CGEventMaskBit(kCGEventLeftMouseUp) |
 	                     CGEventMaskBit(kCGEventRightMouseDown) |
@@ -151,7 +155,7 @@ GlobalShortcutMac::GlobalShortcutMac()
 	                     CGEventMaskBit(kCGEventScrollWheel);
 	port = CGEventTapCreate(kCGSessionEventTap,
 	                        kCGTailAppendEventTap,
-	                        kCGEventTapOptionDefault, // active filter (not only a listener)
+	                        kCGEventTapOptionListenOnly,
 	                        evmask,
 	                        GlobalShortcutMac::callback,
 	                        this);
@@ -478,7 +482,7 @@ bool GlobalShortcutMac::enabled() {
 }
 
 bool GlobalShortcutMac::canSuppress() {
-	return true;
+	return false;
 }
 
 bool GlobalShortcutMac::canDisable() {
