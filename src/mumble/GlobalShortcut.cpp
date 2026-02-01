@@ -639,24 +639,16 @@ GlobalShortcutConfig::GlobalShortcutConfig(Settings &st) : ConfigWidget(st) {
 #endif
 
 #ifdef Q_OS_MAC
-	// Help Mac users enable accessibility access for Mumble...
+	// Help Mac users enable Input Monitoring permission for Mumble...
 	const QOperatingSystemVersion current = QOperatingSystemVersion::current();
 	if (current >= QOperatingSystemVersion::OSXMavericks) {
 		qpbOpenAccessibilityPrefs->setHidden(true);
+		qpbOpenAccessibilityPrefs->setText(tr("Open Privacy Settings"));
 		label->setText(tr("<html><head/><body>"
 						  "<p>"
-						  "Mumble can currently only use mouse buttons and keyboard modifier keys (Alt, Ctrl, Cmd, "
-						  "etc.) for global shortcuts."
+						  "Mumble needs <b>Input Monitoring</b> permission to use global shortcuts such as "
+						  "Push-to-Talk."
 						  "</p>"
-						  "<p>"
-						  "If you want more flexibility, you can add Mumble as a trusted accessibility program in the "
-						  "Security & Privacy section "
-						  "of your Mac's System Preferences."
-						  "</p>"
-						  "<p>"
-						  "In the Security & Privacy preference pane, change to the Privacy tab. Then choose "
-						  "Accessibility (near the bottom) in "
-						  "the list to the left. Finally, add Mumble to the list of trusted accessibility programs."
 						  "</body></html>"));
 	}
 #endif
@@ -677,24 +669,34 @@ bool GlobalShortcutConfig::eventFilter(QObject * /*object*/, QEvent *e) {
 
 bool GlobalShortcutConfig::showWarning() const {
 #ifdef Q_OS_MAC
-#	if MAC_OS_X_VERSION_MAX_ALLOWED >= 1090
-	const QOperatingSystemVersion current = QOperatingSystemVersion::current();
-	if (current >= QOperatingSystemVersion::OSXMavericks) {
-		return !AXIsProcessTrustedWithOptions(nullptr);
-	} else
-#	endif
-	{
-		return !QFile::exists(QLatin1String("/private/var/db/.AccessibilityAPIEnabled"));
+	if (__builtin_available(macOS 10.15, *)) {
+		return !CGPreflightListenEventAccess();
 	}
+#	if MAC_OS_X_VERSION_MAX_ALLOWED >= 1090
+	else {
+		const QOperatingSystemVersion current = QOperatingSystemVersion::current();
+		if (current >= QOperatingSystemVersion::OSXMavericks) {
+			return !AXIsProcessTrustedWithOptions(nullptr);
+		} else {
+			return !QFile::exists(QLatin1String("/private/var/db/.AccessibilityAPIEnabled"));
+		}
+	}
+#	endif
 #endif
 	return false;
 }
 
 void GlobalShortcutConfig::on_qpbOpenAccessibilityPrefs_clicked() {
+#ifdef Q_OS_MAC
+	QStringList args;
+	args << QLatin1String("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent");
+	(void) QProcess::startDetached(QLatin1String("/usr/bin/open"), args);
+#else
 	QStringList args;
 	args << QLatin1String("/Applications/System Preferences.app");
 	args << QLatin1String("/System/Library/PreferencePanes/UniversalAccessPref.prefPane");
 	(void) QProcess::startDetached(QLatin1String("/usr/bin/open"), args);
+#endif
 }
 
 void GlobalShortcutConfig::on_qpbSkipWarning_clicked() {
@@ -885,7 +887,17 @@ void GlobalShortcutConfig::reload() {
 	}
 #ifdef Q_OS_MAC
 	if (!Global::get().s.bSuppressMacEventTapWarning) {
-		qwWarningContainer->setVisible(showWarning());
+		bool warn = showWarning();
+		qwWarningContainer->setVisible(warn);
+		if (warn) {
+			label->setText(tr("<html><head/><body>"
+							  "<p>"
+							  "Mumble needs <b>Input Monitoring</b> permission to use global shortcuts such as "
+							  "Push-to-Talk."
+							  "</p>"
+							  "</body></html>"));
+			qpbOpenAccessibilityPrefs->setHidden(false);
+		}
 	} else {
 		qwWarningContainer->setVisible(false);
 	}
