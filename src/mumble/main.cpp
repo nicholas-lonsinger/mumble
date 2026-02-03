@@ -58,6 +58,7 @@
 #include <QLocale>
 #include <QScreen>
 #include <QtCore/QProcess>
+#include <QtCore/QTimer>
 #include <QtGui/QDesktopServices>
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QTextBrowser>
@@ -870,7 +871,18 @@ int main(int argc, char **argv) {
 	Global::get().mw->msgBox(MainWindow::tr("Skipping version check in debug mode."));
 #endif // QT_NO_DEBUG
 
-	if (url.isValid()) {
+	// Check if we need to restore dialog state from restart
+	if (!Global::get().s.restartOpenDialog.isEmpty()) {
+		QString restartDialog = Global::get().s.restartOpenDialog;
+		if (restartDialog == QLatin1String("config")) {
+			// Defer to allow MainWindow to fully initialize
+			QTimer::singleShot(0, Global::get().mw, &MainWindow::openConfigDialog);
+		} else if (restartDialog == QLatin1String("connect")) {
+			// Clear the flag and open connect dialog
+			Global::get().s.restartOpenDialog.clear();
+			QTimer::singleShot(0, Global::get().mw, []() { Global::get().mw->on_qaServerConnect_triggered(true); });
+		}
+	} else if (url.isValid()) {
 		OpenURLEvent *oue = new OpenURLEvent(url);
 		qApp->postEvent(Global::get().mw, oue);
 #ifdef Q_OS_MAC

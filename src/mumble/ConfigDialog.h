@@ -38,6 +38,11 @@ public:
 	/// 	if no such widget exists.
 	static ConfigWidget *getConfigWidget(const QString &name);
 
+	/// @returns The current tab index (row in the icon list)
+	int currentTabIndex() const;
+	/// Sets the current tab to the specified index
+	void setCurrentTab(int index);
+
 signals:
 	/// Emitted whenever the settings dialog has been accepted. For potential slots this
 	/// means that the settings potentially have changed.

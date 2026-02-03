@@ -15,6 +15,7 @@
 #endif
 
 #include <QtGui/QFileOpenEvent>
+#include <QtWidgets/QDialog>
 
 MumbleApplication *MumbleApplication::instance() {
 	return static_cast< MumbleApplication * >(QCoreApplication::instance());
@@ -40,6 +41,15 @@ void MumbleApplication::onCommitDataRequest(QSessionManager &) {
 		Global::get().s.save();
 		Global::get().mw->forceQuit = true;
 		qWarning() << "Session likely ending. Suppressing ask on quit";
+
+		// Close any modal dialogs that might block the quit
+		while (QWidget *modal = QApplication::activeModalWidget()) {
+			if (QDialog *dialog = qobject_cast< QDialog * >(modal)) {
+				dialog->reject();
+			} else {
+				modal->close();
+			}
+		}
 	}
 }
 

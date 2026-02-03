@@ -24,6 +24,13 @@ QHash< QString, ConfigWidget * > ConfigDialog::s_existingWidgets;
 ConfigDialog::ConfigDialog(QWidget *p) : QDialog(p) {
 	setupUi(this);
 
+#ifdef Q_OS_MAC
+	// Allow application termination even while this modal is open
+	// (e.g., macOS "Quit & Reopen" from Input Monitoring permission dialog)
+	extern void setAllowTerminationWhenModal(QWidget *widget);
+	setAllowTerminationWhenModal(this);
+#endif
+
 	{
 		QMutexLocker lock(&s_existingWidgetsMutex);
 		s_existingWidgets.clear();
@@ -85,6 +92,17 @@ ConfigDialog::ConfigDialog(QWidget *p) : QDialog(p) {
 
 	updateTabOrder();
 	qlwIcons->setFocus();
+
+#ifdef Q_OS_MAC
+	// Track tab changes so restart state is saved with the correct tab
+	// (for macOS "Quit & Reopen" from Input Monitoring permission dialog)
+	connect(qlwIcons, &QListWidget::currentRowChanged, this, [](int row) {
+		if (row >= 0) {
+			Global::get().s.restartConfigTabIndex = row;
+			Global::get().s.save();
+		}
+	});
+#endif
 }
 
 void ConfigDialog::addPage(ConfigWidget *cw, unsigned int idx) {
@@ -314,4 +332,14 @@ void ConfigDialog::accept() {
 	Global::get().s.save();
 
 	QDialog::accept();
+}
+
+int ConfigDialog::currentTabIndex() const {
+	return qlwIcons->currentRow();
+}
+
+void ConfigDialog::setCurrentTab(int index) {
+	if (index >= 0 && index < qlwIcons->count()) {
+		qlwIcons->setCurrentRow(index);
+	}
 }

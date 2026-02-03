@@ -127,6 +127,13 @@ void CertView::setCert(const QList< QSslCertificate > &cert) {
 CertWizard::CertWizard(QWidget *p) : QWizard(p) {
 	setupUi(this);
 
+#ifdef Q_OS_MAC
+	// Allow application termination even while this modal is open
+	// (e.g., macOS "Quit & Reopen" from Input Monitoring permission dialog)
+	extern void setAllowTerminationWhenModal(QWidget *widget);
+	setAllowTerminationWhenModal(this);
+#endif
+
 	Mumble::Accessibility::fixWizardButtonLabels(this);
 
 	setOption(QWizard::NoCancelButton, false);

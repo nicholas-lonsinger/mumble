@@ -349,6 +349,8 @@ const SettingsKey OVERLAY_BLACKLIST_EXCLUDE_KEY     = { "blacklist_exclude" };
 const SettingsKey SETTINGS_VERSION_KEY     = { "settings_version" };
 const SettingsKey CERTIFICATE_KEY          = { "certificate" };
 const SettingsKey MUMBLE_QUIT_NORMALLY_KEY = { "mumble_has_quit_normally" };
+const SettingsKey RESTART_OPEN_DIALOG_KEY  = { "restart_open_dialog" };
+const SettingsKey RESTART_CONFIG_TAB_KEY   = { "restart_config_tab_index" };
 
 } // namespace SettingsKeys
 

@@ -577,6 +577,12 @@ struct Settings {
 	/// A flag used in order to determine whether or not to offer loading the setting's backup file instead
 	bool mumbleQuitNormally = false;
 
+	/// Restart UI state restoration - cleared after use
+	/// Stores which dialog was open before restart: "", "config", or "connect"
+	QString restartOpenDialog;
+	/// ConfigDialog tab index to restore after restart
+	int restartConfigTabIndex = 0;
+
 	bool doEcho() const;
 	bool doPositionalAudio() const;
 

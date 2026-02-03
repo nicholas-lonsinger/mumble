@@ -147,6 +147,12 @@ void to_json(nlohmann::json &j, const Settings &settings) {
 	// means Mumble never got to perform its regular shutdown routine, meaning that it is likely that it has crashed
 	// before.
 	j[SettingsKeys::MUMBLE_QUIT_NORMALLY_KEY] = settings.mumbleQuitNormally;
+
+	// Save restart UI state restoration fields (only when non-empty/non-zero)
+	if (!settings.restartOpenDialog.isEmpty()) {
+		j[SettingsKeys::RESTART_OPEN_DIALOG_KEY] = settings.restartOpenDialog;
+		j[SettingsKeys::RESTART_CONFIG_TAB_KEY]  = settings.restartConfigTabIndex;
+	}
 }
 
 void migrateSettings(nlohmann::json &json, int settingsVersion) {
@@ -215,6 +221,14 @@ void from_json(const nlohmann::json &j, Settings &settings) {
 
 	if (json.contains(static_cast< const char * >(SettingsKeys::MUMBLE_QUIT_NORMALLY_KEY))) {
 		settings.mumbleQuitNormally = json.at(SettingsKeys::MUMBLE_QUIT_NORMALLY_KEY);
+	}
+
+	// Load restart UI state restoration fields
+	if (json.contains(static_cast< const char * >(SettingsKeys::RESTART_OPEN_DIALOG_KEY))) {
+		settings.restartOpenDialog = json.at(SettingsKeys::RESTART_OPEN_DIALOG_KEY).get< QString >();
+	}
+	if (json.contains(static_cast< const char * >(SettingsKeys::RESTART_CONFIG_TAB_KEY))) {
+		settings.restartConfigTabIndex = json.at(SettingsKeys::RESTART_CONFIG_TAB_KEY).get< int >();
 	}
 
 #ifndef USE_RNNOISE

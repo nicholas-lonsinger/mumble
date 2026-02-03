@@ -966,6 +966,10 @@ ConnectDialog::ConnectDialog(QWidget *p, bool autoconnect) : QDialog(p), bAutoCo
 	setupUi(this);
 #ifdef Q_OS_MAC
 	setWindowModality(Qt::WindowModal);
+	// Allow application termination even while this modal is open
+	// (e.g., macOS "Quit & Reopen" from Input Monitoring permission dialog)
+	extern void setAllowTerminationWhenModal(QWidget *widget);
+	setAllowTerminationWhenModal(this);
 #endif
 	bPublicInit = false;
 

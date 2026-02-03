@@ -11,6 +11,37 @@
 #include "Global.h"
 
 #include <CoreFoundation/CoreFoundation.h>
+#import <AppKit/AppKit.h>
+
+#include <QWidget>
+#include <QWindow>
+
+// Allow a modal dialog to not block application termination.
+// This is needed for macOS "Quit & Reopen" from Input Monitoring permission dialog.
+void setAllowTerminationWhenModal(QWidget *widget) {
+	if (!widget) {
+		return;
+	}
+
+	// Ensure the widget has a native window
+	widget->setAttribute(Qt::WA_NativeWindow);
+	widget->winId();  // Force creation of the native window
+
+	QWindow *qwindow = widget->windowHandle();
+	if (!qwindow) {
+		return;
+	}
+
+	NSView *view = reinterpret_cast<NSView *>(qwindow->winId());
+	if (!view) {
+		return;
+	}
+
+	NSWindow *window = [view window];
+	if (window) {
+		window.preventsApplicationTerminationWhenModal = NO;
+	}
+}
 
 char *os_lang = nullptr;
 

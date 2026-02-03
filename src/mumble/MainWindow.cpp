@@ -4195,6 +4195,19 @@ void MainWindow::openConfigDialog() {
 
 	Global::get().inConfigUI = true;
 
+	// Restore tab position if returning from restart (e.g., after macOS "Quit & Reopen")
+	int restoreTab = -1;
+	if (Global::get().s.restartOpenDialog == QLatin1String("config")) {
+		restoreTab = Global::get().s.restartConfigTabIndex;
+		dlg->setCurrentTab(restoreTab);
+	}
+
+	// Save state immediately so it persists if app is killed externally
+	// (e.g., macOS "Quit & Reopen" from Input Monitoring permission dialog)
+	Global::get().s.restartOpenDialog     = QLatin1String("config");
+	Global::get().s.restartConfigTabIndex = restoreTab >= 0 ? restoreTab : 0;
+	Global::get().s.save();
+
 	QObject::connect(dlg, &ConfigDialog::settingsAccepted, Global::get().talkingUI, &TalkingUI::on_settingsChanged);
 	QObject::connect(dlg, &ConfigDialog::settingsAccepted, []() {
 		if (Global::get().s.requireThemeApplication) {
@@ -4203,26 +4216,51 @@ void MainWindow::openConfigDialog() {
 	});
 
 	if (dlg->exec() == QDialog::Accepted) {
+		// Check for restart FIRST, before calling showRaiseWindow() which queues a deferred show()
+		if (Global::get().s.requireRestartToApply
+			&& QMessageBox::question(this, tr("Restart Mumble?"),
+									 tr("Some settings will only apply after a restart of Mumble. Restart Mumble now?"),
+									 QMessageBox::Yes | QMessageBox::No)
+				   == QMessageBox::Yes) {
+			// Update state for restoration after restart
+			Global::get().s.restartOpenDialog     = QLatin1String("config");
+			Global::get().s.restartConfigTabIndex = dlg->currentTabIndex();
+			Global::get().s.save();
+
+			// Clean up this dialog before initiating quit
+			Global::get().inConfigUI = false;
+			delete dlg;
+			dlg = nullptr;
+
+			// Defer the quit to ensure we're out of all event contexts
+			forceQuit     = true;
+			restartOnQuit = true;
+			QTimer::singleShot(0, this, [this]() {
+				// Close any modal dialogs that might be blocking
+				while (QWidget *modal = QApplication::activeModalWidget()) {
+					if (QDialog *dialog = qobject_cast< QDialog * >(modal)) {
+						dialog->reject();
+					} else {
+						modal->close();
+					}
+				}
+				close();
+			});
+			return;
+		}
+
+		// Only update UI if NOT restarting (showRaiseWindow queues a deferred show())
 		setupView(false);
 		showRaiseWindow();
 		updateTransmitModeComboBox(Global::get().s.atTransmit);
 		updateUserModel();
 		emit talkingStatusChanged();
-
-		if (Global::get().s.requireRestartToApply) {
-			if (Global::get().s.requireRestartToApply
-				&& QMessageBox::question(
-					   this, tr("Restart Mumble?"),
-					   tr("Some settings will only apply after a restart of Mumble. Restart Mumble now?"),
-					   QMessageBox::Yes | QMessageBox::No)
-					   == QMessageBox::Yes) {
-				forceQuit     = true;
-				restartOnQuit = true;
-
-				close();
-			}
-		}
 	}
+
+	// Clear restart state on normal dialog close
+	Global::get().s.restartOpenDialog.clear();
+	Global::get().s.restartConfigTabIndex = 0;
+	Global::get().s.save();
 
 	Global::get().inConfigUI = false;
 

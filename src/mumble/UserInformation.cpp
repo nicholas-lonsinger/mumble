@@ -59,6 +59,11 @@ void UserInformation::on_qpbCertificate_clicked() {
 	ViewCert *vc = new ViewCert(qlCerts, this);
 	vc->setWindowModality(Qt::WindowModal);
 	vc->setAttribute(Qt::WA_DeleteOnClose, true);
+#ifdef Q_OS_MAC
+	// Allow application termination even while this modal is open
+	extern void setAllowTerminationWhenModal(QWidget *widget);
+	setAllowTerminationWhenModal(vc);
+#endif
 	vc->show();
 }
 
