@@ -129,11 +129,50 @@ CGEventRef GlobalShortcutMac::callback(CGEventTapProxy proxy, CGEventType type,
 GlobalShortcutMac::GlobalShortcutMac()
     : loop(nullptr)
     , port(nullptr)
-    , modmask(static_cast<CGEventFlags>(0)) {
+    , modmask(static_cast<CGEventFlags>(0))
+    , m_eventTapInitialized(false) {
 #ifndef QT_NO_DEBUG
 	qWarning("GlobalShortcutMac: Debug build detected. Disabling shortcut engine.");
 	return;
 #endif
+
+	kbdLayout = nullptr;
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
+# if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
+	if (TISCopyCurrentKeyboardInputSource && TISGetInputSourceProperty)
+# endif
+	{
+		TISInputSourceRef inputSource = TISCopyCurrentKeyboardInputSource();
+		if (inputSource) {
+			CFDataRef data = static_cast<CFDataRef>(TISGetInputSourceProperty(inputSource, kTISPropertyUnicodeKeyLayoutData));
+			if (data)
+				kbdLayout = reinterpret_cast<UCKeyboardLayout *>(const_cast<UInt8 *>(CFDataGetBytePtr(data)));
+		}
+	}
+#endif
+#ifndef __LP64__
+	if (! kbdLayout) {
+		SInt16 currentKeyScript = GetScriptManagerVariable(smKeyScript);
+		SInt16 lastKeyLayoutID = GetScriptVariable(currentKeyScript, smScriptKeys);
+		Handle handle = GetResource('uchr', lastKeyLayoutID);
+		if (handle)
+			kbdLayout = reinterpret_cast<UCKeyboardLayout *>(*handle);
+	}
+#endif
+	if (! kbdLayout)
+		qWarning("GlobalShortcutMac: No keyboard layout mapping available. Unable to perform key translation.");
+
+	// Note: Event tap creation is deferred to ensureEventTap() which is called
+	// from setEnabled(true). This avoids prompting for Input Monitoring permission
+	// until Global Shortcuts are actually enabled.
+}
+
+void GlobalShortcutMac::ensureEventTap() {
+	if (m_eventTapInitialized) {
+		return;
+	}
+	m_eventTapInitialized = true;
 
 	if (__builtin_available(macOS 10.15, *)) {
 		CGRequestListenEventAccess();
@@ -164,33 +203,6 @@ GlobalShortcutMac::GlobalShortcutMac()
 		qWarning("GlobalShortcutMac: Unable to create EventTap. Global Shortcuts will not be available.");
 		return;
 	}
-
-	kbdLayout = nullptr;
-
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1050
-# if MAC_OS_X_VERSION_MIN_REQUIRED < 1050
-	if (TISCopyCurrentKeyboardInputSource && TISGetInputSourceProperty)
-# endif
-	{
-		TISInputSourceRef inputSource = TISCopyCurrentKeyboardInputSource();
-		if (inputSource) {
-			CFDataRef data = static_cast<CFDataRef>(TISGetInputSourceProperty(inputSource, kTISPropertyUnicodeKeyLayoutData));
-			if (data)
-				kbdLayout = reinterpret_cast<UCKeyboardLayout *>(const_cast<UInt8 *>(CFDataGetBytePtr(data)));
-		}
-	}
-#endif
-#ifndef __LP64__
-	if (! kbdLayout) {
-		SInt16 currentKeyScript = GetScriptManagerVariable(smKeyScript);
-		SInt16 lastKeyLayoutID = GetScriptVariable(currentKeyScript, smScriptKeys);
-		Handle handle = GetResource('uchr', lastKeyLayoutID);
-		if (handle)
-			kbdLayout = reinterpret_cast<UCKeyboardLayout *>(*handle);
-	}
-#endif
-	if (! kbdLayout)
-		qWarning("GlobalShortcutMac: No keyboard layout mapping available. Unable to perform key translation.");
 
 	start(QThread::TimeCriticalPriority);
 }
@@ -332,6 +344,10 @@ void GlobalShortcutMac::forwardEvent(void *evt) {
 }
 
 void GlobalShortcutMac::run() {
+	if (!port) {
+		return;
+	}
+
 	loop = CFRunLoopGetCurrent();
 	CFRunLoopSourceRef src = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0);
 	CFRunLoopAddSource(loop, src, kCFRunLoopCommonModes);
@@ -467,6 +483,11 @@ GlobalShortcutMac::ButtonInfo GlobalShortcutMac::buttonInfo(const QVariant &v) {
 }
 
 void GlobalShortcutMac::setEnabled(bool b) {
+	if (b) {
+		// Initialize the event tap on first enable (requests Input Monitoring permission)
+		ensureEventTap();
+	}
+
 	// Since Mojave, passing nullptr to CGEventTapEnable() segfaults.
 	if (port) {
 		CGEventTapEnable(port, b);

@@ -41,6 +41,9 @@ protected:
 	UCKeyboardLayout *kbdLayout;
 
 	void run() Q_DECL_OVERRIDE;
+	void ensureEventTap();
+
+	bool m_eventTapInitialized = false;
 
 	static CGEventRef callback(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *udata);
 	QString translateMouseButton(const unsigned int keycode) const;
