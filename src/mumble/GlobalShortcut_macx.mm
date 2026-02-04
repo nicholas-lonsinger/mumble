@@ -129,37 +129,12 @@ CGEventRef GlobalShortcutMac::callback(CGEventTapProxy proxy, CGEventType type,
 GlobalShortcutMac::GlobalShortcutMac()
     : loop(nullptr)
     , port(nullptr)
-    , modmask(static_cast<CGEventFlags>(0)) {
+    , modmask(static_cast<CGEventFlags>(0))
+    , m_eventTapInitialized(false) {
 #ifndef QT_NO_DEBUG
 	qWarning("GlobalShortcutMac: Debug build detected. Disabling shortcut engine.");
 	return;
 #endif
-
-	CGEventMask evmask = CGEventMaskBit(kCGEventLeftMouseDown) |
-	                     CGEventMaskBit(kCGEventLeftMouseUp) |
-	                     CGEventMaskBit(kCGEventRightMouseDown) |
-	                     CGEventMaskBit(kCGEventRightMouseUp) |
-	                     CGEventMaskBit(kCGEventOtherMouseDown) |
-	                     CGEventMaskBit(kCGEventOtherMouseUp) |
-	                     CGEventMaskBit(kCGEventKeyDown) |
-	                     CGEventMaskBit(kCGEventKeyUp) |
-	                     CGEventMaskBit(kCGEventFlagsChanged) |
-	                     CGEventMaskBit(kCGEventMouseMoved) |
-	                     CGEventMaskBit(kCGEventLeftMouseDragged) |
-	                     CGEventMaskBit(kCGEventRightMouseDragged) |
-	                     CGEventMaskBit(kCGEventOtherMouseDragged) |
-	                     CGEventMaskBit(kCGEventScrollWheel);
-	port = CGEventTapCreate(kCGSessionEventTap,
-	                        kCGTailAppendEventTap,
-	                        kCGEventTapOptionDefault, // active filter (not only a listener)
-	                        evmask,
-	                        GlobalShortcutMac::callback,
-	                        this);
-
-	if (! port) {
-		qWarning("GlobalShortcutMac: Unable to create EventTap. Global Shortcuts will not be available.");
-		return;
-	}
 
 	kbdLayout = nullptr;
 
@@ -187,6 +162,45 @@ GlobalShortcutMac::GlobalShortcutMac()
 #endif
 	if (! kbdLayout)
 		qWarning("GlobalShortcutMac: No keyboard layout mapping available. Unable to perform key translation.");
+
+	// Note: Event tap creation is deferred to ensureEventTap() which is called
+	// from setEnabled(true). This avoids prompting for Input Monitoring permission
+	// until Global Shortcuts are actually enabled.
+}
+
+void GlobalShortcutMac::ensureEventTap() {
+	if (m_eventTapInitialized) {
+		return;
+	}
+	m_eventTapInitialized = true;
+
+	CGRequestListenEventAccess();
+
+	CGEventMask evmask = CGEventMaskBit(kCGEventLeftMouseDown) |
+	                     CGEventMaskBit(kCGEventLeftMouseUp) |
+	                     CGEventMaskBit(kCGEventRightMouseDown) |
+	                     CGEventMaskBit(kCGEventRightMouseUp) |
+	                     CGEventMaskBit(kCGEventOtherMouseDown) |
+	                     CGEventMaskBit(kCGEventOtherMouseUp) |
+	                     CGEventMaskBit(kCGEventKeyDown) |
+	                     CGEventMaskBit(kCGEventKeyUp) |
+	                     CGEventMaskBit(kCGEventFlagsChanged) |
+	                     CGEventMaskBit(kCGEventMouseMoved) |
+	                     CGEventMaskBit(kCGEventLeftMouseDragged) |
+	                     CGEventMaskBit(kCGEventRightMouseDragged) |
+	                     CGEventMaskBit(kCGEventOtherMouseDragged) |
+	                     CGEventMaskBit(kCGEventScrollWheel);
+	port = CGEventTapCreate(kCGSessionEventTap,
+	                        kCGTailAppendEventTap,
+	                        kCGEventTapOptionListenOnly,
+	                        evmask,
+	                        GlobalShortcutMac::callback,
+	                        this);
+
+	if (! port) {
+		qWarning("GlobalShortcutMac: Unable to create EventTap. Global Shortcuts will not be available.");
+		return;
+	}
 
 	start(QThread::TimeCriticalPriority);
 }
@@ -328,6 +342,10 @@ void GlobalShortcutMac::forwardEvent(void *evt) {
 }
 
 void GlobalShortcutMac::run() {
+	if (!port) {
+		return;
+	}
+
 	loop = CFRunLoopGetCurrent();
 	CFRunLoopSourceRef src = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0);
 	CFRunLoopAddSource(loop, src, kCFRunLoopCommonModes);
@@ -463,6 +481,11 @@ GlobalShortcutMac::ButtonInfo GlobalShortcutMac::buttonInfo(const QVariant &v) {
 }
 
 void GlobalShortcutMac::setEnabled(bool b) {
+	if (b) {
+		// Initialize the event tap on first enable (requests Input Monitoring permission)
+		ensureEventTap();
+	}
+
 	// Since Mojave, passing nullptr to CGEventTapEnable() segfaults.
 	if (port) {
 		CGEventTapEnable(port, b);
@@ -478,7 +501,7 @@ bool GlobalShortcutMac::enabled() {
 }
 
 bool GlobalShortcutMac::canSuppress() {
-	return true;
+	return false;
 }
 
 bool GlobalShortcutMac::canDisable() {
