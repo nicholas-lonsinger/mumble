@@ -24,8 +24,7 @@
 #include <QtWidgets/QToolTip>
 
 #ifdef Q_OS_MAC
-#	include <ApplicationServices/ApplicationServices.h>
-#	include <QtCore/QOperatingSystemVersion>
+#	include "GlobalShortcut_macx.h"
 #endif
 
 #include <cassert>
@@ -639,8 +638,14 @@ GlobalShortcutConfig::GlobalShortcutConfig(Settings &st) : ConfigWidget(st) {
 #endif
 
 #ifdef Q_OS_MAC
-	// Help Mac users enable Input Monitoring permission for Mumble...
+	// Help Mac users enable the appropriate permission for Mumble.
+	// On macOS 10.15+, this is Input Monitoring; on older versions, it's Accessibility.
 	qpbOpenInputMonitoringSettings->setHidden(true);
+	if (!macOS_usesInputMonitoring()) {
+		// Update the label text for older macOS versions that use Accessibility
+		label->setText(tr("<html><head/><body><p>Mumble needs <b>Accessibility</b> permission to use global "
+		                  "shortcuts such as Push-to-Talk.</p></body></html>"));
+	}
 #endif
 }
 
@@ -659,7 +664,7 @@ bool GlobalShortcutConfig::eventFilter(QObject * /*object*/, QEvent *e) {
 
 bool GlobalShortcutConfig::showWarning() const {
 #ifdef Q_OS_MAC
-	return !CGPreflightListenEventAccess();
+	return !macOS_hasGlobalShortcutPermission();
 #else
 	return false;
 #endif
@@ -667,9 +672,7 @@ bool GlobalShortcutConfig::showWarning() const {
 
 void GlobalShortcutConfig::on_qpbOpenInputMonitoringSettings_clicked() {
 #ifdef Q_OS_MAC
-	QStringList args;
-	args << QLatin1String("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent");
-	(void) QProcess::startDetached(QLatin1String("/usr/bin/open"), args);
+	macOS_openPrivacySettings();
 #endif
 }
 
